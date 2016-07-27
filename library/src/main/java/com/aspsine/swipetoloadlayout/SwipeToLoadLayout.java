@@ -3,7 +3,10 @@ package com.aspsine.swipetoloadlayout;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.support.v4.view.MotionEventCompat;
+import android.support.v4.view.NestedScrollingChild;
+import android.support.v4.view.NestedScrollingChildHelper;
 import android.support.v4.view.ViewCompat;
+import android.support.v7.widget.RecyclerView;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -13,10 +16,15 @@ import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.Scroller;
 
+import com.aspsine.swipetoloadlayout.OnLoadMoreListener;
+import com.aspsine.swipetoloadlayout.OnRefreshListener;
+import com.aspsine.swipetoloadlayout.R;
+
+
 /**
  * Created by Aspsine on 2015/8/13.
  */
-public class SwipeToLoadLayout extends ViewGroup {
+public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild {
 
     private static final String TAG = SwipeToLoadLayout.class.getSimpleName();
 
@@ -72,7 +80,7 @@ public class SwipeToLoadLayout extends ViewGroup {
     /**
      * indicate whether in debug mode
      */
-    private boolean mDebug;
+    private boolean mDebug = true;
 
     private float mDragRatio = DEFAULT_DRAG_RATIO;
 
@@ -245,6 +253,11 @@ public class SwipeToLoadLayout extends ViewGroup {
         public static final int SCALE = 3;
     }
 
+    private final int[] mScrollOffset = new int[2];
+    private final int[] mScrollConsumed = new int[2];
+    private final int[] mNestedOffsets = new int[2];
+    private NestedScrollingChildHelper nestedScrollingChildHelper;
+
     public SwipeToLoadLayout(Context context) {
         this(context, null);
     }
@@ -322,6 +335,9 @@ public class SwipeToLoadLayout extends ViewGroup {
 
         mTouchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         mAutoScroller = new AutoScroller();
+
+        nestedScrollingChildHelper = new NestedScrollingChildHelper(this);
+        setNestedScrollingEnabled(true);
     }
 
     @Override
@@ -351,8 +367,54 @@ public class SwipeToLoadLayout extends ViewGroup {
     }
 
     @Override
+    public void setNestedScrollingEnabled(boolean enabled) {
+        nestedScrollingChildHelper.setNestedScrollingEnabled(enabled);
+    }
+
+    @Override
+    public boolean isNestedScrollingEnabled() {
+        return nestedScrollingChildHelper.isNestedScrollingEnabled();
+    }
+
+    @Override
+    public boolean hasNestedScrollingParent() {
+        return nestedScrollingChildHelper.hasNestedScrollingParent();
+    }
+
+    @Override
+    public boolean startNestedScroll(int axes) {
+        return nestedScrollingChildHelper.startNestedScroll(axes);
+    }
+
+    @Override
+    public void stopNestedScroll() {
+        nestedScrollingChildHelper.stopNestedScroll();
+    }
+
+    @Override
+    public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed, int[] offsetInWindow) {
+        return nestedScrollingChildHelper.dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow);
+    }
+
+    @Override
+    public boolean dispatchNestedScroll(int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed, int[] offsetInWindow) {
+        return nestedScrollingChildHelper.dispatchNestedScroll(dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed, offsetInWindow);
+    }
+
+    @Override
+    public boolean dispatchNestedFling(float velocityX, float velocityY, boolean consumed) {
+        return nestedScrollingChildHelper.dispatchNestedFling(velocityX, velocityY, consumed);
+    }
+
+    @Override
+    public boolean dispatchNestedPreFling(float velocityX, float velocityY) {
+        return nestedScrollingChildHelper.dispatchNestedPreFling(velocityX, velocityY);
+    }
+
+    @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
         // header
         if (mHeaderView != null) {
             final View headerView = mHeaderView;
@@ -377,6 +439,13 @@ public class SwipeToLoadLayout extends ViewGroup {
             if (mLoadMoreTriggerOffset < mFooterHeight) {
                 mLoadMoreTriggerOffset = mFooterHeight;
             }
+        }
+    }
+
+    private void stopTargetNestedScroll() {
+        if(mTargetView instanceof RecyclerView) {
+            RecyclerView recyclerView  = (RecyclerView) mTargetView;
+            recyclerView.stopNestedScroll();
         }
     }
 
@@ -437,6 +506,9 @@ public class SwipeToLoadLayout extends ViewGroup {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
+        if(mDebug) {
+            Log.d("event", TAG + "---dispatchTouchEvent event: " + dumpEvent(ev));
+        }
         final int action = MotionEventCompat.getActionMasked(ev);
         switch (action) {
             case MotionEvent.ACTION_CANCEL:
@@ -455,6 +527,9 @@ public class SwipeToLoadLayout extends ViewGroup {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
+        if(mDebug) {
+            Log.d("event", TAG + "---onInterceptTouchEvent event: " + dumpEvent(event));
+        }
         final int action = MotionEventCompat.getActionMasked(event);
         switch (action) {
             case MotionEvent.ACTION_DOWN:
@@ -500,6 +575,7 @@ public class SwipeToLoadLayout extends ViewGroup {
                 float x = getMotionEventX(event, mActivePointerId);
                 final float yInitDiff = y - mInitDownY;
                 final float xInitDiff = x - mInitDownX;
+
                 mLastY = y;
                 mLastX = x;
                 boolean moved = Math.abs(yInitDiff) > Math.abs(xInitDiff);
@@ -511,6 +587,9 @@ public class SwipeToLoadLayout extends ViewGroup {
                 if (triggerCondition) {
                     // if the refresh's or load more's trigger condition  is true,
                     // intercept the move action event and pass it to SwipeToLoadLayout#onTouchEvent()
+
+                    stopTargetNestedScroll();
+                    startNestedScroll(ViewCompat.SCROLL_AXIS_VERTICAL);
                     return true;
                 }
                 break;
@@ -530,6 +609,9 @@ public class SwipeToLoadLayout extends ViewGroup {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if(mDebug) {
+            Log.d("event", TAG + "---onTouchEvent event: " + dumpEvent(event));
+        }
         final int action = MotionEventCompat.getActionMasked(event);
 
         switch (action) {
@@ -543,12 +625,22 @@ public class SwipeToLoadLayout extends ViewGroup {
                 final float y = getMotionEventY(event, mActivePointerId);
                 final float x = getMotionEventX(event, mActivePointerId);
 
-                final float yDiff = y - mLastY;
-                final float xDiff = x - mLastX;
+                float yDiff = y - mLastY;
+                float xDiff = x - mLastX;
                 mLastY = y;
                 mLastX = x;
 
-                if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > mTouchSlop) {
+                int dx = (int) -xDiff;
+                int dy = (int) -yDiff;
+
+                if (dispatchNestedPreScroll(dx, dy, mScrollConsumed, mScrollOffset)) {
+                    xDiff += mScrollConsumed[0];
+                    yDiff += mScrollConsumed[1];
+                    mLastX = x - mScrollOffset[0];
+                    mLastY = y - mScrollOffset[1];
+                }
+
+                if (yDiff == 0 || (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > mTouchSlop)) {
                     return false;
                 }
 
@@ -573,6 +665,8 @@ public class SwipeToLoadLayout extends ViewGroup {
                         return false;
                     }
                 }
+
+
 
                 if (STATUS.isRefreshStatus(mStatus)) {
                     if (STATUS.isSwipingToRefresh(mStatus) || STATUS.isReleaseToRefresh(mStatus)) {
@@ -613,6 +707,7 @@ public class SwipeToLoadLayout extends ViewGroup {
             }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
+                stopNestedScroll();
                 if (mActivePointerId == INVALID_POINTER) {
                     return false;
                 }
@@ -622,6 +717,28 @@ public class SwipeToLoadLayout extends ViewGroup {
                 break;
         }
         return super.onTouchEvent(event);
+    }
+
+    private String dumpEvent(MotionEvent event) {
+        int action = event.getAction();
+        int pointerId = MotionEventCompat.getPointerId(event, 0);
+        float y = getMotionEventY(event, pointerId);
+        float x = getMotionEventX(event, pointerId);
+        StringBuilder sb = new StringBuilder();
+        sb.append("action=").append(action);
+        sb.append("[");
+        sb.append("x=").append(x);
+        sb.append(",y=").append(y);
+        sb.append("]");
+        return sb.toString();
+    }
+
+    private String dumpArray(int[] ar) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+        sb.append(ar[0]).append(",").append(ar[1]);
+        sb.append("}");
+        return sb.toString();
     }
 
     /**
