@@ -16,10 +16,6 @@ import android.view.ViewGroup;
 import android.widget.AbsListView;
 import android.widget.Scroller;
 
-import com.aspsine.swipetoloadlayout.OnLoadMoreListener;
-import com.aspsine.swipetoloadlayout.OnRefreshListener;
-import com.aspsine.swipetoloadlayout.R;
-
 
 /**
  * Created by Aspsine on 2015/8/13.
@@ -443,8 +439,8 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
     }
 
     private void stopTargetNestedScroll() {
-        if(mTargetView instanceof RecyclerView) {
-            RecyclerView recyclerView  = (RecyclerView) mTargetView;
+        if (mTargetView instanceof RecyclerView) {
+            RecyclerView recyclerView = (RecyclerView) mTargetView;
             recyclerView.stopNestedScroll();
         }
     }
@@ -506,7 +502,7 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent ev) {
-        if(mDebug) {
+        if (mDebug) {
             Log.d("event", TAG + "---dispatchTouchEvent event: " + dumpEvent(ev));
         }
         final int action = MotionEventCompat.getActionMasked(ev);
@@ -527,7 +523,7 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
-        if(mDebug) {
+        if (mDebug) {
             Log.d("event", TAG + "---onInterceptTouchEvent event: " + dumpEvent(event));
         }
         final int action = MotionEventCompat.getActionMasked(event);
@@ -609,7 +605,7 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if(mDebug) {
+        if (mDebug) {
             Log.d("event", TAG + "---onTouchEvent event: " + dumpEvent(event));
         }
         final int action = MotionEventCompat.getActionMasked(event);
@@ -665,7 +661,6 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
                         return false;
                     }
                 }
-
 
 
                 if (STATUS.isRefreshStatus(mStatus)) {
