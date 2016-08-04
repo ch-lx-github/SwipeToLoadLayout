@@ -76,7 +76,7 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
     /**
      * indicate whether in debug mode
      */
-    private boolean mDebug = true;
+    private boolean mDebug;
 
     private float mDragRatio = DEFAULT_DRAG_RATIO;
 
