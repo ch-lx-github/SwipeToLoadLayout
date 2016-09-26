@@ -1228,19 +1228,19 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
             footerView.layout(footerLeft, footerTop, footerRight, footerBottom);
         }
 
-        if (mStyle == STYLE.CLASSIC
-                || mStyle == STYLE.ABOVE) {
-            if (mHeaderView != null) {
-                mHeaderView.bringToFront();
-            }
-            if (mFooterView != null) {
-                mFooterView.bringToFront();
-            }
-        } else if (mStyle == STYLE.BLEW || mStyle == STYLE.SCALE) {
-            if (mTargetView != null) {
-                mTargetView.bringToFront();
-            }
-        }
+//        if (mStyle == STYLE.CLASSIC
+//                || mStyle == STYLE.ABOVE) {
+//            if (mHeaderView != null) {
+//                mHeaderView.bringToFront();
+//            }
+//            if (mFooterView != null) {
+//                mFooterView.bringToFront();
+//            }
+//        } else if (mStyle == STYLE.BLEW || mStyle == STYLE.SCALE) {
+//            if (mTargetView != null) {
+//                mTargetView.bringToFront();
+//            }
+//        }
     }
 
     private void fixCurrentStatusLayout() {
