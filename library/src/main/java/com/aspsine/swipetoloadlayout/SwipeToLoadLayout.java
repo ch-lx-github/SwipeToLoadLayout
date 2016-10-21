@@ -59,6 +59,8 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
 
     private OnLoadMoreListener mLoadMoreListener;
 
+    private View mEmptyView;
+
     private View mHeaderView;
 
     private View mTargetView;
@@ -343,13 +345,15 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
         if (childNum == 0) {
             // no child return
             return;
-        } else if (0 < childNum && childNum < 4) {
+        } else if (0 < childNum && childNum < 5) {
             mHeaderView = findViewById(R.id.swipe_refresh_header);
             mTargetView = findViewById(R.id.swipe_target);
             mFooterView = findViewById(R.id.swipe_load_more_footer);
+            mEmptyView = findViewById(R.id.swipe_empty);
+            initEmptyView();
         } else {
             // more than three children: unsupported!
-            throw new IllegalStateException("Children num must equal or less than 3");
+            throw new IllegalStateException("Children num must equal or less than 4");
         }
         if (mTargetView == null) {
             return;
@@ -359,6 +363,21 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
         }
         if (mFooterView != null && mFooterView instanceof SwipeTrigger) {
             mFooterView.setVisibility(GONE);
+        }
+    }
+
+    private void initEmptyView() {
+        if (mTargetView != null && mTargetView instanceof SwipeRecyclerView) {
+            SwipeRecyclerView recyclerView = (SwipeRecyclerView) mTargetView;
+            recyclerView.setListener(new SwipeRecyclerView.Listener() {
+                @Override
+                public void onActionSetAdapter(RecyclerView.Adapter adapter) {
+                    if(adapter != null) {
+                        adapter.registerAdapterDataObserver(mObserver);
+                    }
+                    checkIfEmpty();
+                }
+            });
         }
     }
 
@@ -435,6 +454,12 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
             if (mLoadMoreTriggerOffset < mFooterHeight) {
                 mLoadMoreTriggerOffset = mFooterHeight;
             }
+        }
+
+        //empty
+        if (mEmptyView != null) {
+            final View emptyView = mEmptyView;
+            measureChildWithMargins(emptyView, widthMeasureSpec, 0, heightMeasureSpec, 0);
         }
     }
 
@@ -1194,6 +1219,40 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
             targetView.layout(targetLeft, targetTop, targetRight, targetBottom);
         }
 
+        //layout empty
+        if (mEmptyView != null) {
+            final View emptyView = mEmptyView;
+            MarginLayoutParams lp = (MarginLayoutParams) emptyView.getLayoutParams();
+            final int targetLeft = paddingLeft + lp.leftMargin;
+            final int targetTop;
+
+            switch (mStyle) {
+                case STYLE.CLASSIC:
+                    // classic
+                    targetTop = paddingTop + lp.topMargin + mTargetOffset;
+                    break;
+                case STYLE.ABOVE:
+                    // above
+                    targetTop = paddingTop + lp.topMargin;
+                    break;
+                case STYLE.BLEW:
+                    // classic
+                    targetTop = paddingTop + lp.topMargin + mTargetOffset;
+                    break;
+                case STYLE.SCALE:
+                    // classic
+                    targetTop = paddingTop + lp.topMargin + mTargetOffset;
+                    break;
+                default:
+                    // classic
+                    targetTop = paddingTop + lp.topMargin + mTargetOffset;
+                    break;
+            }
+            final int targetRight = targetLeft + emptyView.getMeasuredWidth();
+            final int targetBottom = targetTop + emptyView.getMeasuredHeight();
+            emptyView.layout(targetLeft, targetTop, targetRight, targetBottom);
+        }
+
         // layout footer
         if (mFooterView != null) {
             final View footerView = mFooterView;
@@ -1719,6 +1778,61 @@ public class SwipeToLoadLayout extends ViewGroup implements NestedScrollingChild
             STATUS.printStatus(status);
         }
     }
+
+    void checkIfEmpty() {
+        if(mTargetView == null || !(mTargetView instanceof RecyclerView)) {
+            return;
+        }
+        RecyclerView recyclerView = (RecyclerView) mTargetView;
+        RecyclerView.Adapter adapter = recyclerView.getAdapter();
+        if (adapter == null) {
+            return;
+        }
+        if (adapter.getItemCount() == 0) {
+            mTargetView.setVisibility(View.GONE);
+            mEmptyView.setVisibility(View.VISIBLE);
+        } else {
+            mTargetView.setVisibility(View.VISIBLE);
+            mEmptyView.setVisibility(View.GONE);
+        }
+    }
+
+    final RecyclerView.AdapterDataObserver mObserver = new RecyclerView.AdapterDataObserver() {
+        @Override
+        public void onChanged() {
+            super.onChanged();
+            checkIfEmpty();
+        }
+
+        @Override
+        public void onItemRangeInserted(int positionStart, int itemCount) {
+            super.onItemRangeInserted(positionStart, itemCount);
+            checkIfEmpty();
+        }
+
+        @Override
+        public void onItemRangeRemoved(int positionStart, int itemCount) {
+            super.onItemRangeRemoved(positionStart, itemCount);
+            checkIfEmpty();
+        }
+
+        @Override
+        public void onItemRangeChanged(int positionStart, int itemCount) {
+            super.onItemRangeChanged(positionStart, itemCount);
+            checkIfEmpty();
+        }
+
+        @Override
+        public void onItemRangeMoved(int fromPosition, int toPosition, int itemCount) {
+            super.onItemRangeMoved(fromPosition, toPosition, itemCount);
+        }
+
+        @Override
+        public void onItemRangeChanged(int positionStart, int itemCount, Object payload) {
+            super.onItemRangeChanged(positionStart, itemCount, payload);
+            checkIfEmpty();
+        }
+    };
 
     /**
      * an inner util class.

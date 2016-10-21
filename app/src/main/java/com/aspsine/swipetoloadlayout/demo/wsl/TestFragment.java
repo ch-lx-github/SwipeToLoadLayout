@@ -74,9 +74,9 @@ public class TestFragment extends Fragment implements OnLoadMoreListener {
         List<String> data = new ArrayList<>();
         switch (index) {
             case 0:
-                for (int i = 0; i < 5; i++) {
-                    data.add("index=" + index + " and value=" + i);
-                }
+//                for (int i = 0; i < 5; i++) {
+//                    data.add("index=" + index + " and value=" + i);
+//                }
                 break;
             case 1:
                 for (int i = 0; i < 6; i++) {

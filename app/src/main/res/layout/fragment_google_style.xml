@@ -17,14 +17,24 @@
         android:id="@id/swipe_refresh_header"
         layout="@layout/layout_google_hook_header" />
 
-    <android.support.v7.widget.RecyclerView
+    <com.aspsine.swipetoloadlayout.SwipeRecyclerView
         android:id="@id/swipe_target"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false" />
 
+    <!--<android.support.v7.widget.RecyclerView-->
+        <!--android:id="@id/swipe_target"-->
+        <!--android:layout_width="match_parent"-->
+        <!--android:layout_height="match_parent"-->
+        <!--android:clipToPadding="false" />-->
+
     <include
         android:id="@id/swipe_load_more_footer"
         layout="@layout/layout_google_hook_footer" />
+
+    <include android:id="@id/swipe_empty"
+        layout="@layout/layout_test_empty"
+        />
 
 </com.aspsine.swipetoloadlayout.SwipeToLoadLayout>
