@@ -1,4 +1,7 @@
 <resources>
+    <declare-styleable name="DdToLoadLayout">
+
+    </declare-styleable>
     <declare-styleable name="SwipeToLoadLayout">
         <attr name="refresh_enabled" format="boolean" />
         <attr name="load_more_enabled" format="boolean" />
