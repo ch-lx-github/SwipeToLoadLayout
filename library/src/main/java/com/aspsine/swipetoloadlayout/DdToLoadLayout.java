@@ -12,25 +12,32 @@ import android.view.View;
 import android.view.ViewGroup;
 
 /**
+ * Refresh and load more feature layout
  * Created by wsl on 16-11-30.
  */
 
 public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, NestedScrollingParent {
 
-    public interface Listener {
-        void onRefresh();
-    }
-
     private static final String TAG = DdToLoadLayout.class.getSimpleName();
+
+    private static final long DELAYED_TIME_COMPLETE = 300;
     private static final int STATE_ORIGIN = 0;
 
     private static final int STATE_REFRESH_PREPARE = 1;
     private static final int STATE_REFRESH_RELEASE = 2;
     private static final int STATE_REFRESH_PROGRESS = 3;
+    //trigger by user and offset == progress
+    private static final int STATE_REFRESH_COMPLETE = 4;
 
-    private static final int STATE_LOAD_MORE_PREPARE = 4;
-    private static final int STATE_LOAD_MORE_RELEASE = 5;
-    private static final int STATE_LOAD_MORE_PROGRESS = 6;
+    private static final int STATE_LOAD_MORE_PREPARE = 5;
+    private static final int STATE_LOAD_MORE_RELEASE = 6;
+    private static final int STATE_LOAD_MORE_PROGRESS = 7;
+    //trigger by user and offset == progress
+    private static final int STATE_LOAD_MORE_COMPLETE = 8;
+
+    private static final int DIRECTION_DOWN = 1;
+    private static final int DIRECTION_UP = -1;
+    private static final int DIRECTION_ORIGIN = 0;
 
     private NestedScrollingChildHelper mNestedScrollingChildHelper;
     private DdScrollHelper mDdScrollHelper;
@@ -38,27 +45,36 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
     private int mRefreshTriggerOffset;
     private int mLoadMoreTriggerOffset;
 
+    private boolean mRefreshEnabled;
+    private boolean mLoadMoreEnabled;
+
     private View mHeaderView;
     private View mTargetView;
     private View mFooterView;
 
     private int mState;
     private boolean mWasFlung;
+    private int mLastNestedDirection;
+    private boolean mFirstNestedPreScroll;
+    private boolean mSkipNestPreScroll;
 
-    private Listener mListener;
+    private OnRefreshListener mRefreshListener;
+    private OnLoadMoreListener mLoadMoreListener;
+
+    private CompleteRunnable mCompleteRunnable;
+
+
+    private final int[] mScrollOffset = new int[2];
+    private final int[] mScrollConsumed = new int[2];
 
     private boolean mDebug = true;
-
-    public void setListener(Listener listener) {
-        this.mListener = listener;
-    }
 
     public void setDebug(boolean debug) {
         this.mDebug = debug;
     }
 
     private void printLog(String msg) {
-        if(mDebug) {
+        if (mDebug) {
             Log.d(TAG, msg);
         }
     }
@@ -78,59 +94,14 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
 
     private void init(Context context, AttributeSet attrs) {
         mDdScrollHelper = new DdScrollHelper(this);
-        mDdScrollHelper.setListener(new DdScrollHelper.Listener() {
-            @Override
-            public void onOffsetUpdate(int curOffset) {
-                printLog(TAG + "------curOffset: " + curOffset);
-                //check state and callback to header or footer that display some style
-                if (curOffset < 0) {
-                    //load more
-                    if (curOffset > -mLoadMoreTriggerOffset) {
-                        //load more prepare
-                        setState(STATE_LOAD_MORE_PREPARE);
-                        printLog(TAG + "------load more prepare state");
-                    } else if(curOffset == -mLoadMoreTriggerOffset) {
-                        //load more progress
-                        setState(STATE_LOAD_MORE_PROGRESS);
-                        printLog(TAG + "------load more progress state");
-
-                    } else {
-                        //load more release
-                        setState(STATE_LOAD_MORE_RELEASE);
-                        printLog(TAG + "------load more release state");
-                    }
-                } else if (curOffset > 0) {
-                    //refresh
-                    if (curOffset < mRefreshTriggerOffset) {
-                        //refresh prepare
-                        setState(STATE_REFRESH_PREPARE);
-                        printLog(TAG + "------refresh prepare state");
-                    } else if(curOffset == mRefreshTriggerOffset) {
-                        //refresh progress
-                        setState(STATE_REFRESH_PROGRESS);
-                        printLog(TAG + "------refresh progress state");
-                        if(mListener != null) {
-                            mListener.onRefresh();
-                        }
-                    } else {
-                        //refresh release
-                        setState(STATE_REFRESH_RELEASE);
-                        printLog(TAG + "------refresh release state");
-                    }
-                } else {
-                    //origin state
-                    setState(STATE_ORIGIN);
-                    printLog(TAG + "------origin state");
-                }
-            }
-        });
-
-        mNestedScrollingChildHelper = new NestedScrollingChildHelper(this);
-        mNestedScrollingChildHelper.setNestedScrollingEnabled(true);
+        mDdScrollHelper.setListener(new DdScrollListener());
 
         TypedArray a = context.obtainStyledAttributes(attrs, R.styleable.DdToLoadLayout);
+        mLoadMoreEnabled = a.getBoolean(R.styleable.DdToLoadLayout_dd_swipe_enabled_load_more, false);
+        mRefreshEnabled = a.getBoolean(R.styleable.DdToLoadLayout_dd_swipe_enabled_refresh, false);
         a.recycle();
 
+        setNestedScrollingEnabled(true);
     }
 
     private void setState(int state) {
@@ -139,9 +110,13 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
 
     @Override
     public boolean onStartNestedScroll(View child, View target, int nestedScrollAxes) {
-        Log.d("test", "onStartNestedScroll ---------------");
-        boolean started = (nestedScrollAxes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0
-                && !isRefreshingOrLoadingMore();
+
+        boolean started = (nestedScrollAxes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0;
+//                && isOrigin();
+//                && !isRefreshingOrLoadingMore();
+
+//        mLastNestedDirection = DIRECTION_ORIGIN;
+
         //// TODO: 16-11-30  may cancel auto scroll or animation
         return started;
     }
@@ -150,46 +125,127 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
     public void onNestedScrollAccepted(View child, View target, int axes) {
         //do nothing
         super.onNestedScrollAccepted(child, target, axes);
+
+        if((axes & ViewCompat.SCROLL_AXIS_VERTICAL) != 0) {
+            mFirstNestedPreScroll = true;
+
+            //start nested to dependent view, such as DdHeaderLayout
+            startNestedScroll(ViewCompat.SCROLL_AXIS_VERTICAL);
+        }
     }
 
     @Override
     public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
-        Log.d("test", "onNestedPreScroll ---------------dy: " + dy);
         if (dy != 0) {
-            int min;
-            int max;
+
+            int min = 0;
+            int max = 0;
+            int measuredHeight = getMeasuredHeight();
+
+            boolean handled = false;
+
             if (dy < 0) {
                 // We're scrolling down, content scrolling up
-                //Target
                 boolean targetCanScrollDown = ViewCompat.canScrollVertically(target, -1);
-//                Log.d("test", "We're scrolling down and targetCanScrollDown = " + targetCanScrollDown);
                 if(!targetCanScrollDown) {
-                    //Now offset down based on dy
-                    min = 0;
-                    max = getMeasuredHeight();
-                    consumed[1] = mDdScrollHelper.scroll(dy, min, max);
+                    if (dispatchNestedPreScroll(dx, dy, mScrollConsumed, mScrollOffset)) {
+                        //dispatch nested scroll to dependent view, such as DdHeaderLayout
+//                        dx -= mScrollConsumed[0];
+//                        dy -= mScrollConsumed[1];
+                        consumed[1] = mScrollConsumed[1];
+                        return;
+                    }
+                }
+
+                if(mFirstNestedPreScroll && !isOrigin()) {
+                    //first nested pre scroll state must be origin
+                    return;
+                }
+
+                if(mRefreshEnabled && !mSkipNestPreScroll && (!targetCanScrollDown || (mLastNestedDirection == DIRECTION_UP))) {
+                    handled = true;
+                    switch (mLastNestedDirection) {
+                        case DIRECTION_ORIGIN:
+                            mLastNestedDirection = DIRECTION_DOWN;
+                        case DIRECTION_DOWN:
+                            min = 0;
+                            max = measuredHeight;
+                            break;
+                        case DIRECTION_UP:
+                            min = -measuredHeight;
+                            max = 0;
+                            break;
+                    }
                 }
             } else {
                 // We're scrolling up, content scrolling down
-                boolean targetCanScrollUp = ViewCompat.canScrollVertically(target, 1);
-                if(!targetCanScrollUp) {
-                    min = -getMeasuredHeight();
-                    max = 0;
-                    consumed[1] = mDdScrollHelper.scroll(dy, min, max);
+                Log.d("yyy", "onNestedPreScroll scroll up before dy: " + dy);
+                if (dispatchNestedPreScroll(dx, dy, mScrollConsumed, mScrollOffset)) {
+                    //dispatch nested scroll to dependent view, such as DdHeaderLayout
+                    consumed[1] = mScrollConsumed[1];
+                    return;
                 }
+
+                if(mFirstNestedPreScroll && !isOrigin()) {
+                    //first nested pre scroll state must be origin
+                    return;
+                }
+
+                boolean targetCanScrollUp = ViewCompat.canScrollVertically(target, 1);
+                if(mLoadMoreEnabled && !mSkipNestPreScroll && (!targetCanScrollUp ||
+                        (mLastNestedDirection == DIRECTION_DOWN))) {
+                    handled = true;
+                    switch (mLastNestedDirection) {
+                        case DIRECTION_ORIGIN:
+                            mLastNestedDirection = DIRECTION_UP;
+                        case DIRECTION_UP:
+                            min = -measuredHeight;
+                            max = 0;
+                            break;
+                        case DIRECTION_DOWN:
+                            min = 0;
+                            max = measuredHeight;
+                            break;
+
+                    }
+                }
+            }
+
+            if(handled) {
+                mFirstNestedPreScroll = false;
+                consumed[1] = mDdScrollHelper.scroll(dy, min, max);
             }
         }
     }
 
     @Override
     public void onNestedScroll(View target, int dxConsumed, int dyConsumed, int dxUnconsumed, int dyUnconsumed) {
-        Log.d("test", "onNestedScroll ---------------");
-        super.onNestedScroll(target, dxConsumed, dyConsumed, dxUnconsumed, dyUnconsumed);
+//        Log.d("debug", "onNestedScroll dyUnconsumed: " + dyUnconsumed + "---dyConsumed: " + dyConsumed);
+        if(dyUnconsumed < 0) {
+            // If the scrolling view is scrolling down but not consuming, it's probably be at
+            // the top of it's content
+            Log.d("debug", "onNestedScroll before dyUnconsumed: " + dyUnconsumed);
+            if (dispatchNestedPreScroll(dxUnconsumed, dyUnconsumed, mScrollConsumed, mScrollOffset)) {
+//                dxUnconsumed -= mScrollConsumed[0];
+                dyUnconsumed -= mScrollConsumed[1];
+                Log.d("debug", "onNestedScroll after dyUnconsumed: " + dyUnconsumed);
+            }
+
+            if(dyUnconsumed < 0) {
+                //still has unconsumed dy
+                int min = -getMeasuredHeight();
+                int max = 0;
+                mDdScrollHelper.scroll(dyUnconsumed, min, max);
+            }
+        } else {
+            Log.d("debug", "onNestedScroll scrolling up");
+        }
     }
 
     @Override
     public boolean onNestedPreFling(View target, float velocityX, float velocityY) {
-        return super.onNestedPreFling(target, velocityX, velocityY);
+        return true;
+//        return super.onNestedPreFling(target, velocityX, velocityY);
     }
 
     @Override
@@ -199,11 +255,19 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
 
     @Override
     public void onStopNestedScroll(View child) {
+        //stop nested to dependent view, such as DdHeaderLayout
+        stopNestedScroll();
+
+        mFirstNestedPreScroll = true;
+        mLastNestedDirection = DIRECTION_ORIGIN;
         //may auto scroll
-        Log.d("test", "onStopNestedScroll ---------------");
-        if(!mWasFlung) {
+        if (!mWasFlung) {
+            if(!isOrigin()) {
+                mSkipNestPreScroll = true;
+            }
             snapIfNeeded();
         }
+
         super.onStopNestedScroll(child);
     }
 
@@ -220,11 +284,80 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
                 break;
             case STATE_LOAD_MORE_RELEASE:
                 scrollToLoadMore();
-                setState(STATE_LOAD_MORE_PROGRESS);
                 break;
             default:
                 break;
         }
+    }
+
+    // NestedScrollingChild start
+    private NestedScrollingChildHelper getScrollingChildHelper() {
+        if (mNestedScrollingChildHelper == null) {
+            mNestedScrollingChildHelper = new NestedScrollingChildHelper(this);
+        }
+        return mNestedScrollingChildHelper;
+    }
+
+    @Override
+    public void setNestedScrollingEnabled(boolean enabled) {
+        getScrollingChildHelper().setNestedScrollingEnabled(enabled);
+    }
+
+    @Override
+    public boolean isNestedScrollingEnabled() {
+        return getScrollingChildHelper().isNestedScrollingEnabled();
+    }
+
+    @Override
+    public boolean startNestedScroll(int axes) {
+        return getScrollingChildHelper().startNestedScroll(axes);
+    }
+
+    @Override
+    public void stopNestedScroll() {
+        getScrollingChildHelper().stopNestedScroll();
+    }
+
+    @Override
+    public boolean hasNestedScrollingParent() {
+        return getScrollingChildHelper().hasNestedScrollingParent();
+    }
+
+    @Override
+    public boolean dispatchNestedScroll(int dxConsumed, int dyConsumed, int dxUnconsumed,
+                                        int dyUnconsumed, int[] offsetInWindow) {
+        return getScrollingChildHelper().dispatchNestedScroll(dxConsumed, dyConsumed,
+                dxUnconsumed, dyUnconsumed, offsetInWindow);
+    }
+
+    @Override
+    public boolean dispatchNestedPreScroll(int dx, int dy, int[] consumed, int[] offsetInWindow) {
+        return getScrollingChildHelper().dispatchNestedPreScroll(dx, dy, consumed, offsetInWindow);
+    }
+
+    @Override
+    public boolean dispatchNestedFling(float velocityX, float velocityY, boolean consumed) {
+        return getScrollingChildHelper().dispatchNestedFling(velocityX, velocityY, consumed);
+    }
+
+    @Override
+    public boolean dispatchNestedPreFling(float velocityX, float velocityY) {
+        return getScrollingChildHelper().dispatchNestedPreFling(velocityX, velocityY);
+    }
+
+    // NestedScrollingChild end
+
+    @Override
+    protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        if (mCompleteRunnable != null) {
+            removeCallbacks(mCompleteRunnable);
+        }
+        super.onDetachedFromWindow();
     }
 
     @Override
@@ -238,6 +371,19 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
         if (mTargetView == null) {
             throw new IllegalStateException("Target view must not null and id equal swipe_target");
         }
+
+        if (mHeaderView == null) {
+            mRefreshEnabled = false;
+        }
+
+        if (mFooterView == null) {
+            mLoadMoreEnabled = false;
+        }
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
     }
 
     @Override
@@ -274,8 +420,6 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
     @Override
     protected void onLayout(boolean changed, int l, int t, int r, int b) {
         layoutChildren();
-
-        mDdScrollHelper.onViewLayout();
     }
 
     private void layoutChildren() {
@@ -331,21 +475,25 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
     }
 
     private void scrollToOrigin() {
-        int currOffset = mDdScrollHelper.getTopAndBottomOffset();
+        int currOffset = mDdScrollHelper.getCurrentScrollOffset();
         mDdScrollHelper.autoScroll(this, -currOffset);
     }
 
     private void scrollToRefresh() {
-        int currOffset = mDdScrollHelper.getTopAndBottomOffset();
-        if(currOffset > 0 && currOffset > mRefreshTriggerOffset) {
-            int dy = -currOffset + mRefreshTriggerOffset;
+        int currOffset = mDdScrollHelper.getCurrentScrollOffset();
+        int dy;
+        if (currOffset == 0) {
+            dy = mRefreshTriggerOffset;
+            mDdScrollHelper.autoScroll(this, dy, 2000);
+        } else if (currOffset > 0 && currOffset > mRefreshTriggerOffset) {
+            dy = -currOffset + mRefreshTriggerOffset;
             mDdScrollHelper.autoScroll(this, dy);
         }
     }
 
     private void scrollToLoadMore() {
-        int currOffset = mDdScrollHelper.getTopAndBottomOffset();
-        if(currOffset < 0 && -currOffset > mLoadMoreTriggerOffset) {
+        int currOffset = mDdScrollHelper.getCurrentScrollOffset();
+        if (currOffset < 0 && -currOffset > mLoadMoreTriggerOffset) {
             int dy = -currOffset - mLoadMoreTriggerOffset;
             mDdScrollHelper.autoScroll(this, dy);
         }
@@ -360,17 +508,111 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
         return mState == STATE_REFRESH_PROGRESS;
     }
 
+    private boolean isOrigin() {
+        return mState == STATE_ORIGIN;
+    }
+
     private boolean isLoadingMore() {
         return mState == STATE_LOAD_MORE_PROGRESS;
     }
 
     public void setRefresh(boolean refresh) {
-        if(refresh) {
+        if (refresh) {
+            //// TODO: 16-11-30
+            if (isOrigin()) {
+                scrollToRefresh();
+            }
+        } else {
+            if (isRefreshing()) {
+                setState(STATE_REFRESH_COMPLETE);
+                callbackRefresh(STATE_REFRESH_COMPLETE);
+                delayComplete();
+            }
+        }
+    }
+
+    public void setLoadMore(boolean loadMore) {
+        if (loadMore) {
             //// TODO: 16-11-30
         } else {
-            if(isRefreshing()) {
-                scrollToOrigin();
+            if (isLoadingMore()) {
+                setState(STATE_LOAD_MORE_COMPLETE);
+                callbackLoadMore(STATE_LOAD_MORE_COMPLETE);
+                delayComplete();
             }
+        }
+    }
+
+    private void delayComplete() {
+        if (mCompleteRunnable == null) {
+            mCompleteRunnable = new CompleteRunnable();
+        } else {
+            removeCallbacks(mCompleteRunnable);
+        }
+        postDelayed(mCompleteRunnable, DELAYED_TIME_COMPLETE);
+    }
+
+    public void setOnRefreshListener(OnRefreshListener listener) {
+        this.mRefreshListener = listener;
+    }
+
+    public void setOnLoadMoreListener(OnLoadMoreListener listener) {
+        this.mLoadMoreListener = listener;
+    }
+
+    public void setRefreshEnabled(boolean enabled) {
+        this.mRefreshEnabled = enabled;
+    }
+
+    public void setLoadMoreEnabled(boolean enabled) {
+        this.mLoadMoreEnabled = enabled;
+    }
+
+    private void callbackRefresh(int state) {
+        if (mHeaderView == null) {
+            return;
+        }
+        if (!(mHeaderView instanceof DdSwipeTrigger)) {
+            return;
+        }
+        DdSwipeTrigger refreshTrigger = (DdSwipeTrigger) mHeaderView;
+        switch (state) {
+            case STATE_REFRESH_PREPARE:
+                refreshTrigger.onPrepare();
+                break;
+            case STATE_REFRESH_RELEASE:
+                refreshTrigger.onRelease();
+                break;
+            case STATE_REFRESH_PROGRESS:
+                refreshTrigger.onProgress();
+                break;
+            case STATE_REFRESH_COMPLETE:
+                refreshTrigger.onComplete();
+                break;
+        }
+    }
+
+    private void callbackLoadMore(int state) {
+        if (mFooterView == null) {
+            return;
+        }
+        if (!(mFooterView instanceof DdSwipeTrigger)) {
+            return;
+        }
+        DdSwipeTrigger loadMoreTrigger = (DdSwipeTrigger) mFooterView;
+        switch (state) {
+            case STATE_LOAD_MORE_PREPARE:
+                loadMoreTrigger.onPrepare();
+                break;
+            case STATE_LOAD_MORE_RELEASE:
+                loadMoreTrigger.onRelease();
+                break;
+            case STATE_LOAD_MORE_PROGRESS:
+                loadMoreTrigger.onProgress();
+                break;
+            case STATE_LOAD_MORE_COMPLETE:
+                loadMoreTrigger.onComplete();
+                break;
         }
     }
 
@@ -401,6 +643,70 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
 
         public LayoutParams(ViewGroup.LayoutParams source) {
             super(source);
+        }
+    }
+
+    private class CompleteRunnable implements Runnable {
+
+        @Override
+        public void run() {
+            scrollToOrigin();
+        }
+    }
+
+    private class DdScrollListener implements DdScrollHelper.Listener {
+        @Override
+        public void onOffsetUpdate(int curOffset) {
+            printLog(TAG + "------curOffset: " + curOffset);
+            //check state and callback to header or footer that display some style
+            if (curOffset < 0) {
+                //load more
+                if (curOffset > -mLoadMoreTriggerOffset) {
+                    //load more prepare
+                    setState(STATE_LOAD_MORE_PREPARE);
+                    callbackLoadMore(STATE_LOAD_MORE_PREPARE);
+                    printLog(TAG + "------load more prepare state");
+                } else if (curOffset == -mLoadMoreTriggerOffset) {
+                    //load more progress
+                    setState(STATE_LOAD_MORE_PROGRESS);
+                    callbackLoadMore(STATE_LOAD_MORE_PROGRESS);
+                    printLog(TAG + "------load more progress state");
+                    if (mLoadMoreListener != null) {
+                        mLoadMoreListener.onLoadMore();
+                    }
+                } else {
+                    //load more release
+                    setState(STATE_LOAD_MORE_RELEASE);
+                    callbackLoadMore(STATE_LOAD_MORE_RELEASE);
+                    printLog(TAG + "------load more release state");
+                }
+            } else if (curOffset > 0) {
+                //refresh
+                if (curOffset < mRefreshTriggerOffset) {
+                    //refresh prepare
+                    setState(STATE_REFRESH_PREPARE);
+                    callbackRefresh(STATE_REFRESH_PREPARE);
+                    printLog(TAG + "------refresh prepare state");
+                } else if (curOffset == mRefreshTriggerOffset) {
+                    //refresh progress
+                    setState(STATE_REFRESH_PROGRESS);
+                    callbackRefresh(STATE_REFRESH_PROGRESS);
+                    printLog(TAG + "------refresh progress state");
+                    if (mRefreshListener != null) {
+                        mRefreshListener.onRefresh();
+                    }
+                } else {
+                    //refresh release
+                    setState(STATE_REFRESH_RELEASE);
+                    callbackRefresh(STATE_REFRESH_RELEASE);
+                    printLog(TAG + "------refresh release state");
+                }
+            } else {
+                //origin state
+                setState(STATE_ORIGIN);
+                printLog(TAG + "------origin state");
+                mSkipNestPreScroll = false;
+            }
         }
     }
 }

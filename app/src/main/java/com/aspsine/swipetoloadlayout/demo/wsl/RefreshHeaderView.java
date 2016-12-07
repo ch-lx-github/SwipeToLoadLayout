@@ -4,14 +4,13 @@ import android.content.Context;
 import android.util.AttributeSet;
 import android.widget.TextView;
 
-import com.aspsine.swipetoloadlayout.SwipeRefreshTrigger;
-import com.aspsine.swipetoloadlayout.SwipeTrigger;
+import com.aspsine.swipetoloadlayout.DdSwipeTrigger;
 
 /**
  * Created by wsl on 16-11-30.
  */
 
-public class RefreshHeaderView extends TextView implements SwipeTrigger, SwipeRefreshTrigger{
+public class RefreshHeaderView extends TextView implements DdSwipeTrigger {
 
     public RefreshHeaderView(Context context) {
         super(context);
@@ -26,40 +25,22 @@ public class RefreshHeaderView extends TextView implements SwipeTrigger, SwipeRe
     }
 
     @Override
-    public void onRefresh() {
-        setText("REFRESH");
-    }
-
-    @Override
     public void onPrepare() {
-        setText("");
-    }
-
-    @Override
-    public void onMove(int yScrolled, boolean isComplete, boolean automatic) {
-        if (!isComplete) {
-            if (yScrolled <= -getHeight()) {
-                setText("RELEASE TO REFRESH");
-            } else {
-                setText("SWIPE TO REFRESH");
-            }
-        } else {
-            setText("REFRESH RETURNING");
-        }
+        setText("下拉刷新");
     }
 
     @Override
     public void onRelease() {
-        setText("LOADING MORE");
+        setText("释放刷新");
     }
 
     @Override
     public void onComplete() {
-        setText("COMPLETE");
+        setText("刷新完成");
     }
 
     @Override
-    public void onReset() {
-        setText("");
+    public void onProgress() {
+        setText("正在刷新");
     }
 }

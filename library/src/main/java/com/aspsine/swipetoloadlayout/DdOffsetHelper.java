@@ -2,17 +2,14 @@ package com.aspsine.swipetoloadlayout;
 
 import android.support.v4.view.ViewCompat;
 import android.support.v4.widget.ScrollerCompat;
-import android.util.Log;
 import android.view.View;
 
 /**
- * DdToLoadLayout2 scroll helper
- * dy > 0 means scroll up (content down)
- * dy < 0 means scroll down (content up)
+ * DdToLoadLayout scroll helper
  * Created by wsl on 16-11-30.
  */
 
-final class DdScrollHelper {
+final class DdOffsetHelper {
 
     private static final int AUTO_SCROLL_DURATION = 500;
 
@@ -20,7 +17,7 @@ final class DdScrollHelper {
         void onOffsetUpdate(int offset);
     }
 
-    private View mLayout;
+    private ViewOffsetHelper mViewOffsetHelper;
 
     private Listener mListener;
 
@@ -35,45 +32,38 @@ final class DdScrollHelper {
      * View must be DdToLoadLayout
      * @param view
      */
-    public DdScrollHelper(View view) {
-        mLayout = view;
+    public DdOffsetHelper(View view) {
+        mViewOffsetHelper = new ViewOffsetHelper(view);
     }
 
-    /**
-     *
-     * @param dy
-     * @param minOffset
-     * @param maxOffset
-     * @return
-     */
+    public void onViewLayout() {
+        mViewOffsetHelper.onViewLayout();
+    }
+
     final int scroll(int dy, int minOffset, int maxOffset) {
-        Log.d("debug0", "scroll currOffset : " + getCurrentScrollOffset() + "---dy: " + dy);
-        return scrollInternal(getCurrentScrollOffset() - dy, minOffset, maxOffset);
+        return setHeaderTopBottomOffset(getTopAndBottomOffset() - dy, minOffset, maxOffset);
     }
 
-    private int scrollInternal(int newOffset) {
-        return scrollInternal(newOffset,
+    private int setHeaderTopBottomOffset(int newOffset) {
+        return setHeaderTopBottomOffset(newOffset,
                 Integer.MIN_VALUE, Integer.MAX_VALUE);
     }
 
 
-    private int scrollInternal(int newOffset, int minOffset, int maxOffset) {
-        final int curOffset = getCurrentScrollOffset();
+    private int setHeaderTopBottomOffset(int newOffset, int minOffset, int maxOffset) {
+        final int curOffset = getTopAndBottomOffset();
         int consumed = 0;
 
-        Log.d("debug1", "scrollInternal curOffset : " + curOffset);
-
+//        if (minOffset != 0 && curOffset >= minOffset && curOffset <= maxOffset) {
         if (curOffset >= minOffset && curOffset <= maxOffset) {
             // If we have some scrolling range, and we're currently within the min and max
             // offsets, calculate a new offset
             newOffset = DdMathUtils.constrain(newOffset, minOffset, maxOffset);
-            Log.d("debug1", "scrollInternal newOffset : " + newOffset);
 
             if (curOffset != newOffset) {
-                mLayout.scrollTo(0, -newOffset);
+                mViewOffsetHelper.setTopAndBottomOffset(newOffset);
                 // Update how much dy we have consumed
                 consumed = curOffset - newOffset;
-                Log.d("debug1", "scrollInternal consumed : " + consumed);
             }
 
             dispatchOffsetUpdates();
@@ -82,13 +72,14 @@ final class DdScrollHelper {
         return consumed;
     }
 
-    final int getCurrentScrollOffset() {
-        return -mLayout.getScrollY();
+    final int getTopAndBottomOffset() {
+        return mViewOffsetHelper.getTopAndBottomOffset();
     }
 
     private void dispatchOffsetUpdates() {
+        int curOffset = getTopAndBottomOffset();
         if(mListener != null) {
-            mListener.onOffsetUpdate(getCurrentScrollOffset());
+            mListener.onOffsetUpdate(curOffset);
         }
     }
 
@@ -112,9 +103,6 @@ final class DdScrollHelper {
      * @return true means can auto scroll
      */
     final boolean autoScroll(View layout, int dy) {
-        return autoScroll(layout, dy, AUTO_SCROLL_DURATION);
-    }
-    final boolean autoScroll(View layout, int dy, int duration) {
         if (mAutoScrollRunnable != null) {
             layout.removeCallbacks(mAutoScrollRunnable);
             mAutoScrollRunnable = null;
@@ -123,7 +111,7 @@ final class DdScrollHelper {
         if (mAutoScroller == null) {
             mAutoScroller = ScrollerCompat.create(layout.getContext());
         }
-        mAutoScroller.startScroll(0, getCurrentScrollOffset(), 0, dy, duration);
+        mAutoScroller.startScroll(0, getTopAndBottomOffset(), 0, dy, AUTO_SCROLL_DURATION);
         if (mAutoScroller.computeScrollOffset()) {
             mAutoScrollRunnable = new AutoScrollRunnable(layout);
             ViewCompat.postOnAnimation(layout, mAutoScrollRunnable);
@@ -142,7 +130,7 @@ final class DdScrollHelper {
         @Override
         public void run() {
             if (mLayout != null && mAutoScroller != null && mAutoScroller.computeScrollOffset()) {
-                scrollInternal(mAutoScroller.getCurrY());
+                setHeaderTopBottomOffset(mAutoScroller.getCurrY());
 
                 // Post ourselves so that we run on the next animation
                 ViewCompat.postOnAnimation(mLayout, this);

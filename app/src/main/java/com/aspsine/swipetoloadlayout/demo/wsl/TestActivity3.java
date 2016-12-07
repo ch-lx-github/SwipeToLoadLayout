@@ -1,6 +1,7 @@
 package com.aspsine.swipetoloadlayout.demo.wsl;
 
 import android.os.Bundle;
+import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.LinearLayoutManager;
@@ -18,31 +19,31 @@ import butterknife.BindView;
 import butterknife.ButterKnife;
 
 /**
- * Demo for DdToLoadLayout
- * Created by wsl on 16-11-30.
+ * Created by wsl on 16-12-2.
  */
 
-public class TestActivity2 extends AppCompatActivity {
-
-    @BindView(R.id.ddToLoadLayout)
-    DdToLoadLayout ddToLoadLayout;
+public class TestActivity3 extends AppCompatActivity{
 
     @BindView(R.id.swipe_target)
     RecyclerView recyclerView;
 
-    private boolean first = true;
+    @BindView(R.id.ddToLoadLayout)
+    DdToLoadLayout ddToLoadLayout;
 
     @Override
-    public void onCreate(Bundle savedInstanceState) {
+    protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_test2);
+        setContentView(R.layout.activity_test3);
         ButterKnife.bind(this);
-
         initViews();
     }
 
     private void initViews() {
-        ddToLoadLayout = (DdToLoadLayout) findViewById(R.id.ddToLoadLayout);
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setHasFixedSize(true);
+        recyclerView.setItemAnimator(new DefaultItemAnimator());
+        recyclerView.setAdapter(new TestAdapter(mockData()));
+
         ddToLoadLayout.setOnRefreshListener(new OnRefreshListener() {
             @Override
             public void onRefresh() {
@@ -66,12 +67,6 @@ public class TestActivity2 extends AppCompatActivity {
             }
         });
 
-        recyclerView.setLayoutManager(new LinearLayoutManager(this));
-        recyclerView.setHasFixedSize(true);
-        recyclerView.setItemAnimator(new DefaultItemAnimator());
-        recyclerView.setAdapter(new TestAdapter(mockData()));
-
-
     }
 
     private List<String> mockData() {
@@ -80,14 +75,5 @@ public class TestActivity2 extends AppCompatActivity {
             data.add("index=" + i + " and value=" + i);
         }
         return data;
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean hasFocus) {
-        super.onWindowFocusChanged(hasFocus);
-        if(hasFocus && first) {
-            first = false;
-//            ddToLoadLayout.setRefresh(true);
-        }
     }
 }

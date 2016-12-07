@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    app:statusBarBackground="@null">
+
+    <com.wsl.library.design.DdHomeLayout
+        android:id="@+id/bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:fitsSystemWindows="true">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:gravity="center"
+            android:text="@string/desc"
+            android:textAppearance="?android:attr/textAppearanceLarge"
+            app:dd_layout_scrollFlags="1"
+            app:layout_scrollFlags="scroll"
+            android:background="#f33" />
+
+    </com.wsl.library.design.DdHomeLayout>
+
+    <!--app:layout_behavior="com.wsl.library.design.DdHeaderLayout$ScrollingViewBehavior"-->
+    <!--app:layout_behavior="@string/appbar_scrolling_view_behavior"-->
+    <com.aspsine.swipetoloadlayout.DdToLoadLayout
+        android:id="@+id/ddToLoadLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fitsSystemWindows="true"
+        app:dd_swipe_enabled_load_more="true"
+        app:dd_swipe_enabled_refresh="true"
+        app:layout_behavior="com.wsl.library.design.DdHomeLayout$ScrollingViewBehavior">
+
+        <com.aspsine.swipetoloadlayout.demo.wsl.RefreshHeaderView
+            android:id="@+id/swipe_refresh_header"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:background="#f0f"
+            android:gravity="center" />
+
+        <com.aspsine.swipetoloadlayout.demo.wsl.TestRecyclerView
+            android:id="@+id/swipe_target"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scrollbars="vertical" />
+
+        <com.aspsine.swipetoloadlayout.demo.wsl.LoadMoreFooterView
+            android:id="@+id/swipe_load_more_footer"
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:background="#ff0"
+            android:gravity="center"
+            android:textColor="#333" />
+
+    </com.aspsine.swipetoloadlayout.DdToLoadLayout>
+
+</android.support.design.widget.CoordinatorLayout>

@@ -12,7 +12,7 @@
         android:label="@string/app_name"
         android:theme="@style/AppTheme">
         <activity
-            android:name=".wsl.TestActivity2"
+            android:name=".wsl.TestMainActivity"
             android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -21,6 +21,14 @@
             </intent-filter>
         </activity>
         <activity android:name=".AboutActivity"></activity>
+        <activity android:name=".wsl.TestActivity"></activity>
+        <activity android:name=".wsl.TestActivity2"></activity>
+        <activity android:name=".wsl.TestActivity3"
+            android:theme="@style/AppTheme.TestTheme"
+            />
+        <activity android:name=".wsl.TestActivity4"
+            android:theme="@style/AppTheme.TestTheme"
+            />
     </application>
 
 </manifest>

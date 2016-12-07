@@ -1,12 +1,17 @@
 <resources>
+
     <declare-styleable name="DdToLoadLayout">
+
+        <attr name="dd_swipe_enabled_refresh"  format="boolean"/>
+        <attr name="dd_swipe_enabled_load_more" format="boolean"/>
 
     </declare-styleable>
     <declare-styleable name="SwipeToLoadLayout">
+
         <attr name="refresh_enabled" format="boolean" />
         <attr name="load_more_enabled" format="boolean" />
 
-        <attr name="swipe_style" format="enum">
+        <attr name="swipe_style" format="enum">uj
             <enum name="classic" value="0" />
             <enum name="above" value="1" />
             <enum name="blew" value="2" />
