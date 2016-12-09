@@ -210,12 +210,20 @@ public class DdToLoadLayout extends ViewGroup implements NestedScrollingChild, N
 
     @Override
     public boolean onNestedPreFling(View target, float velocityX, float velocityY) {
-        return true;
-//        return super.onNestedPreFling(target, velocityX, velocityY);
+//        Log.d("ddd", "onNestedPreFling  velocityY: " + velocityY);
+        if(velocityY > 0) {
+            //fling up
+        }
+        return super.onNestedPreFling(target, velocityX, velocityY);
     }
 
     @Override
     public boolean onNestedFling(View target, float velocityX, float velocityY, boolean consumed) {
+        Log.d("ddd", "onNestedFling  velocityY: " + velocityY + "---consumed: " + consumed);
+        if(consumed && velocityY < 0) {
+            boolean res = dispatchNestedFling(velocityX, velocityY, true);
+            Log.d("ddd", "onNestedFling  res: " + res);
+        }
         return super.onNestedFling(target, velocityX, velocityY, consumed);
     }
 
